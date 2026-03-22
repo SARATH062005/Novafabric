@@ -18,12 +18,55 @@ from lerobot.robots.so_follower.so_follower import SOFollower, SOFollowerRobotCo
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
-def detect_cloth(frame, model):
+def detect_white_tray(frame):
+    """
+    Detects the white tray area to focus the computer vision logic.
+    Using a more robust combination of high brightness and low color.
+    """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Relaxed White range: Lower 'Value' for shadows, Higher 'Saturation' for off-white
+    lower_white = np.array([0, 0, 140]) 
+    upper_white = np.array([180, 80, 255])
+    
+    mask = cv2.inRange(hsv, lower_white, upper_white)
+    
+    # Stronger morphological cleanup
+    kernel = np.ones((9, 9), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        # Sort by area descending
+        sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        largest = sorted_contours[0]
+        # Lower area threshold (10,000 pixels is roughly 100x100 box)
+        if cv2.contourArea(largest) > 10000: 
+            return cv2.boundingRect(largest)
+    return None
+
+def detect_cloth(frame, model, tray_roi=None):
     """
     Detects the green kerchief using HSV color segmentation and/or YOLO.
+    If tray_roi is provided, it isolates the search within that box.
     """
+    detect_frame = frame
+    offset_x, offset_y = 0, 0
+    
+    if tray_roi is not None:
+        tx, ty, tw, th = tray_roi
+        # Draw tray boundary
+        cv2.rectangle(frame, (tx, ty), (tx+tw, ty+th), (255, 255, 255), 2)
+        cv2.putText(frame, "TRAY ROI ACTIVE", (tx, ty-10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Crop to tray for detection
+        detect_frame = frame[ty:ty+th, tx:tx+tw]
+        offset_x, offset_y = tx, ty
+
     # 1. HSV Color Segmentation tuned for the Green Kerchief in image
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(detect_frame, cv2.COLOR_BGR2HSV)
     
     # Range for the specific green seen in the screenshot
     # Low H value to catch forest green, high S to ignore brown table
@@ -45,33 +88,39 @@ def detect_cloth(frame, model):
 
     if contours:
         largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) > 5000: # Sufficient size for the kerchief
+        if cv2.contourArea(largest) > 4000: # Sufficient size for the kerchief
             M = cv2.moments(largest)
             if M['m00'] > 0:
-                cx = int(M['m10']/M['m00'])
-                cy = int(M['m01']/M['m00'])
+                cx = int(M['m10']/M['m00']) + offset_x
+                cy = int(M['m01']/M['m00']) + offset_y
                 x, y, w, h = cv2.boundingRect(largest)
                 
                 # Draw the green-specific detection
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.rectangle(frame, (x+offset_x, y+offset_y), 
+                            (x+w+offset_x, y+h+offset_y), (0, 255, 0), 2)
                 cv2.circle(frame, (cx, cy), 7, (0, 255, 0), -1)
-                cv2.putText(frame, "GREEN KERCHIEF DETECTED", (x, y-10), 
+                cv2.putText(frame, "CLOTH", (x+offset_x, y+offset_y-5), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 color_detected = True
 
-    # 2. YOLO Segmentation as a secondary refiner
+    # 2. YOLO Segmentation within the ROI or full frame
     if YOLO_AVAILABLE and model is not None:
-        results = model.predict(frame, conf=0.35, verbose=False, max_det=1)
+        results = model.predict(detect_frame, conf=0.35, verbose=False, max_det=1)
         for r in results:
             if r.masks is not None and len(r.masks) > 0:
-                # If YOLO finds it, overlay the professional segmentation
-                frame[:] = r.plot(boxes=False, labels=True)
+                # Plot onto the detect_frame crop
+                overlay = r.plot(boxes=False, labels=True)
+                if tray_roi is not None:
+                    # Place the detection back into the global frame
+                    frame[ty:ty+th, tx:tx+tw] = overlay
+                else:
+                    frame[:] = overlay
                 
-                # If we didn't get a center from color, get it from YOLO
+                # Adjust center from crop to global
                 if not color_detected and len(r.masks.xy) > 0 and len(r.masks.xy[0]) > 0:
                     mask_pts = r.masks.xy[0] 
-                    cx = int(np.mean(mask_pts[:, 0]))
-                    cy = int(np.mean(mask_pts[:, 1]))
+                    cx = int(np.mean(mask_pts[:, 0])) + offset_x
+                    cy = int(np.mean(mask_pts[:, 1])) + offset_y
                     color_detected = True
 
     return color_detected, (cx, cy)
@@ -188,8 +237,12 @@ def main():
             if not ret:
                 break
             
-            # Run Cloth Detection (YOLO or CV)
-            cloth_visible, target_center = detect_cloth(frame, model)
+            # --- VISION LOGIC ---
+            # 1. First find the white tray ROI
+            tray_roi = detect_white_tray(frame)
+            
+            # 2. Find cloth (optionally restricted to tray)
+            cloth_visible, target_center = detect_cloth(frame, model, tray_roi=tray_roi)
 
             # Get latest robot observations for UI
             obs = robot.get_observation()

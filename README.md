@@ -4,6 +4,7 @@
 
 ## 🚀 Features
 
+- **White Tray Auto-ROI**: Automatically detects and locks onto a white tray to eliminate background interference and improve cloth segmentation.
 - **YOLOv11 Segmentation**: Real-time detection and mask segmentation of the fabric for precise grasping.
 - **Trajectory Teaching**: Continuous path recording during human teaching—no more waiting for the arm to "stop" to save a point.
 - **Dynamic Vision Offset**: Automatically adjusts the entire folding trajectory based on the cloth's detected position in the frame.

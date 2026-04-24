@@ -1,0 +1,267 @@
+<?xml version="1.0"?>
+<robot name="so_100_arm">
+
+  <!-- Gazebo ROS2 Control Plugin -->
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find so_100_arm)/config/controllers_5dof.yaml</parameters>
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+    </plugin>
+  </gazebo>
+
+  <ros2_control name="gz_ros2_control/GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+
+    <!-- Joint command interfaces with realistic limits -->
+    <joint name="Shoulder_Rotation">
+      <command_interface name="position">
+        <param name="min">-2.62</param>
+        <param name="max">2.62</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="Shoulder_Pitch">
+      <command_interface name="position">
+        <param name="min">-1.57</param>
+        <param name="max">1.57</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="Elbow">
+      <command_interface name="position">
+        <param name="min">0.0</param>
+        <param name="max">2.36</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="Wrist_Pitch">
+      <command_interface name="position">
+        <param name="min">-1.57</param>
+        <param name="max">1.57</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="Wrist_Roll">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <joint name="Gripper">
+      <command_interface name="position">
+        <param name="min">0.0</param>
+        <param name="max">0.78</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Base.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.15 0.15 0.02"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Shoulder Rotation Link -->
+  <link name="Shoulder_Rotation_Pitch">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Shoulder_Rotation_Pitch.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.08 0.10 0.06"/>
+      </geometry>
+    </collision>
+    <gazebo reference="Shoulder_Rotation_Pitch">
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
+      <kp>100000</kp>
+      <kd>1</kd>
+      <maxVel>0.2</maxVel>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+  </link>
+
+  <joint name="Shoulder_Rotation" type="revolute">
+    <parent link="base_link"/>
+    <child link="Shoulder_Rotation_Pitch"/>
+    <origin xyz="0 -0.0452 0.0165" rpy="1.5708 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.62" upper="2.62" effort="40" velocity="1.5"/>
+    <dynamics damping="0.05" friction="0.01"/>
+  </joint>
+
+  <!-- Upper Arm -->
+  <link name="Upper_Arm">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Upper_Arm.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.03" length="0.12"/>
+      </geometry>
+    </collision>
+    <gazebo reference="Upper_Arm">
+      <mu1>0.7</mu1>
+      <mu2>0.7</mu2>
+      <kp>80000</kp>
+      <kd>1</kd>
+      <maxVel>0.2</maxVel>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+  </link>
+
+  <joint name="Shoulder_Pitch" type="revolute">
+    <parent link="Shoulder_Rotation_Pitch"/>
+    <child link="Upper_Arm"/>
+    <origin xyz="0 0.1025 0.0306" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-1.57" upper="1.57" effort="30" velocity="1.5"/>
+    <dynamics damping="0.05" friction="0.01"/>
+  </joint>
+
+  <!-- Lower Arm -->
+  <link name="Lower_Arm">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Lower_Arm.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.025" length="0.14"/>
+      </geometry>
+    </collision>
+    <gazebo reference="Lower_Arm">
+      <mu1>0.7</mu1>
+      <mu2>0.7</mu2>
+      <kp>80000</kp>
+      <kd>1</kd>
+      <maxVel>0.2</maxVel>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+  </link>
+
+  <joint name="Elbow" type="revolute">
+    <parent link="Upper_Arm"/>
+    <child link="Lower_Arm"/>
+    <origin xyz="0 0.11257 0.028" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0.0" upper="2.36" effort="25" velocity="1.2"/>
+    <dynamics damping="0.04" friction="0.01"/>
+  </joint>
+
+  <!-- Wrist Pitch-Roll -->
+  <link name="Wrist_Pitch_Roll">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Wrist_Pitch_Roll.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.05 0.06 0.05"/>
+      </geometry>
+    </collision>
+    <gazebo reference="Wrist_Pitch_Roll">
+      <mu1>0.6</mu1>
+      <mu2>0.6</mu2>
+      <kp>50000</kp>
+      <kd>1</kd>
+      <maxVel>0.2</maxVel>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+  </link>
+
+  <joint name="Wrist_Pitch" type="revolute">
+    <parent link="Lower_Arm"/>
+    <child link="Wrist_Pitch_Roll"/>
+    <origin xyz="0 0.0052 0.1349" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-1.57" upper="1.57" effort="15" velocity="1.5"/>
+    <dynamics damping="0.03" friction="0.005"/>
+  </joint>
+
+  <link name="Fixed_Gripper">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Fixed_Gripper.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.02 0.08 0.02"/>
+      </geometry>
+    </collision>
+    <gazebo reference="Fixed_Gripper">
+      <mu1>0.5</mu1>
+      <mu2>0.5</mu2>
+      <kp>50000</kp>
+      <kd>0.5</kd>
+      <maxVel>0.1</maxVel>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+  </link>
+
+  <joint name="Wrist_Roll" type="continuous">
+    <parent link="Wrist_Pitch_Roll"/>
+    <child link="Fixed_Gripper"/>
+    <origin xyz="0 -0.0601 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.02" friction="0.005"/>
+  </joint>
+
+  <!-- Moving Jaw (Gripper) -->
+  <link name="Moving_Jaw">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/Moving_Jaw.STL"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.02 0.04 0.01"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Gripper" type="revolute">
+    <parent link="Fixed_Gripper"/>
+    <child link="Moving_Jaw"/>
+    <origin xyz="-0.0202 -0.0244 0" rpy="3.1416 0 3.1416"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="0.78" effort="10" velocity="0.5"/>
+    <dynamics damping="0.02" friction="0.01"/>
+  </joint>
+
+</robot>

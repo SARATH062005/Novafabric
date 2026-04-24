@@ -157,7 +157,7 @@ def main():
         print("Robot connected.")
         
         # --- ACCURACY & SPEED CONFIGURATION ---
-        fast_accel = 120 
+        fast_accel = 220 
         stiffness = 32 # Increase P_Coefficient for more accurate holding (default 16)
         for motor in robot.bus.motors:
             try:
@@ -207,6 +207,7 @@ def main():
 
     mode = "TEACHING" 
     playback_index = 0
+    playback_waypoints = [] 
     last_move_time = 0
     
     # Fast path following speed (seconds per point)
@@ -399,12 +400,12 @@ def main():
             elif mode == "PLAYBACK":
                 cur_time = time.time()
                 if cur_time - last_move_time > time_between_waypoints/trajectory_steps:
-                    if playback_index < len(waypoints) - 1:
+                    if playback_index < len(playback_waypoints) - 1:
                         # Smooth Trajectory Logic: Linear Interpolation (LERP)
-                        # We are moving from waypoints[playback_index] to [playback_index+1]
+                        # We are moving from playback_waypoints[playback_index] to [playback_index+1]
                         # but in small 'trajectory_steps'
-                        start_wp = waypoints[playback_index]
-                        end_wp = waypoints[playback_index+1]
+                        start_wp = playback_waypoints[playback_index]
+                        end_wp = playback_waypoints[playback_index+1]
                         
                         # Use a sub-index for the interpolation
                         if not hasattr(main, 'sub_idx'): main.sub_idx = 0
@@ -412,9 +413,17 @@ def main():
                         ratio = main.sub_idx / trajectory_steps
                         interp_wp = {}
                         for k in start_wp:
-                            if isinstance(start_wp[k], (int, float)):
-                                interp_wp[k] = start_wp[k] + (end_wp[k] - start_wp[k]) * ratio
+                            # Interpolate only joint positions (.pos) that exist in both waypoints
+                            if k.endswith(".pos"):
+                                if k in end_wp and isinstance(start_wp[k], (int, float)) and isinstance(end_wp[k], (int, float)):
+                                    interp_wp[k] = start_wp[k] + (end_wp[k] - start_wp[k]) * ratio
+                                else:
+                                    interp_wp[k] = start_wp[k]
+                            # Skip reference metadata for robot action
+                            elif k in ["ref_cx", "ref_cy"]:
+                                continue
                             else:
+                                # For any other metadata, just carry it over from start_wp
                                 interp_wp[k] = start_wp[k]
 
                         robot.send_action(interp_wp)
@@ -425,9 +434,9 @@ def main():
                             playback_index += 1
                         
                         last_move_time = cur_time
-                    elif playback_index == len(waypoints) - 1:
+                    elif playback_index == len(playback_waypoints) - 1:
                         # Reach the final point
-                        robot.send_action(waypoints[-1])
+                        robot.send_action(playback_waypoints[-1])
                         print("Folding completed.")
                         robot.bus.disable_torque()
                         mode = "TEACHING"

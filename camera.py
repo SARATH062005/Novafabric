@@ -1,7 +1,7 @@
 import cv2
 
 # Try 0 first. If not working, try 1, 2, or 3
-camera_index = 0  
+camera_index = 2  
 
 cap = cv2.VideoCapture(camera_index)
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
